@@ -1,28 +1,16 @@
-"use client";
-
-import Image from "next/image";
-import { useAdaptiveContext } from "@/components/context/adaptive-context";
-import { SectionHeading } from "@/components/ui/section-heading";
 import { content } from "@/lib/content";
 
-const disciplineByContext = { growth: "discipline-growth", experience: "discipline-experience", engineering: "discipline-engineering" } as const;
-
 export function Professionals() {
-  const { context } = useAdaptiveContext();
-  const activeDiscipline = context in disciplineByContext ? disciplineByContext[context as keyof typeof disciplineByContext] : null;
-  const professionals = content.featuredProfessionals().sort((a, b) => Number(b.disciplineIds.includes(activeDiscipline ?? "")) - Number(a.disciplineIds.includes(activeDiscipline ?? "")) || a.displayOrder - b.displayOrder);
-  return (
-    <section className="section people" id="people" aria-labelledby="people-title">
-      <SectionHeading id="people-title" eyebrow="04 / Professionals" title="Pensamento sênior, colaboração direta." description="Uma rede preparada para crescer por competência, não por uma grade fixa de cargos." />
-      <div className="people-grid">
-        {professionals.map((professional) => {
-          const professionalDisciplines = content.disciplinesByIds(professional.disciplineIds);
-          return <article className="person" key={professional.id} data-context={professionalDisciplines[0]?.slug}>
-            <div className="person__portrait"><Image src={professional.portrait.src} alt={professional.portrait.alt} width={professional.portrait.width} height={professional.portrait.height} sizes="(max-width: 640px) 84vw, (max-width: 1000px) 45vw, 31vw" /></div>
-            <div className="person__info"><p>{professionalDisciplines.map((item) => item.name).join(" + ")}</p><h3>{professional.name}</h3><span>{professional.title}</span><p>{professional.shortBio}</p><small>{professional.knowledgeIds.length} capacidades · {content.services().filter((service) => service.expertIds.includes(professional.id)).length} serviços</small></div>
-          </article>;
-        })}
-      </div>
-    </section>
-  );
+  const professionals = content.featuredProfessionals();
+  return <section className="people section-pad" id="people" aria-labelledby="people-title">
+    <p className="section-index">04 <span>Professionals</span></p>
+    <header className="people__head"><h2 id="people-title">Capability<br />is plural.</h2><p>O roster cresce por competência. Profissionais conectam-se por conhecimento e contexto de projeto, não por cards fixos.</p></header>
+    <ol className="people__roster">{professionals.map((professional, index) => {
+      const professionalDisciplines = content.disciplinesByIds(professional.disciplineIds);
+      const professionalKnowledge = content.knowledgeByIds(professional.knowledgeIds);
+      return <li className="person-line" key={professional.id} data-context={professionalDisciplines[0]?.slug}>
+        <span>P.{String(index + 1).padStart(2, "0")}</span><strong>{professional.name}</strong><span>{professional.title}</span><span>{professionalKnowledge.map((item) => item.name).join(" · ")}</span><i aria-hidden="true" />
+      </li>;
+    })}<li className="roster-tail"><span>System capacity</span><span>Expandable / multi-expert by discipline</span></li></ol>
+  </section>;
 }

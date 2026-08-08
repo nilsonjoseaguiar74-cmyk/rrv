@@ -7,6 +7,8 @@ export const metadata: Metadata = {
   description: "Growth, Experience e Engineering como um único sistema digital.",
 };
 
+export const viewport = { width: "device-width", initialScale: 1 };
+
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="pt-BR">

@@ -7,7 +7,7 @@ export const disciplines = [
     name: "Growth",
     shortName: "G",
     description: "Aquisição, mídia e inteligência de performance orientadas por dados.",
-    accent: "#ff4d00",
+    accent: "#bdf600",
     displayOrder: 1,
   },
   {
@@ -16,7 +16,7 @@ export const disciplines = [
     name: "Experience",
     shortName: "X",
     description: "Produtos digitais claros, úteis e construídos ao redor de pessoas.",
-    accent: "#b9ff3d",
+    accent: "#ff5d3a",
     displayOrder: 2,
   },
   {
@@ -25,7 +25,7 @@ export const disciplines = [
     name: "Engineering",
     shortName: "E",
     description: "Arquitetura e software resilientes para ideias que precisam escalar.",
-    accent: "#4a7cff",
+    accent: "#9eeaff",
     displayOrder: 3,
   },
 ] satisfies Discipline[];

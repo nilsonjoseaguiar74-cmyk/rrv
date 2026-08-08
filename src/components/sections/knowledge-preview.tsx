@@ -1,31 +1,22 @@
-import { LineIcon } from "@/components/ui/line-icon";
-import { SectionHeading } from "@/components/ui/section-heading";
 import { content } from "@/lib/content";
 
-const iconByKnowledge: Record<string, string> = { growth: "trend", design: "frame", engineering: "nodes", strategy: "compass" };
-
 export function KnowledgePreview() {
-  const items = content.featuredKnowledge();
+  const knowledge = content.featuredKnowledge();
   const professionals = content.featuredProfessionals();
   const projects = content.featuredProjects();
   const services = content.services();
-  return (
-    <section className="section capability" id="capabilities" aria-labelledby="capability-title">
-      <SectionHeading id="capability-title" eyebrow="05 / Capability map" title="Conhecimento existe entre coisas." description="Uma leitura leve das relações que sustentam cada capacidade — pessoas, evidências e serviços conectados por IDs." inverse />
-      <div className="capability-map">
-        <div className="capability-map__axis" aria-hidden="true"><span>Professional</span><span>Knowledge</span><span>Project</span><span>Service</span></div>
-        {items.map((item, index) => {
-          const relatedProfessionals = professionals.filter((professional) => professional.knowledgeIds.includes(item.id));
-          const relatedProjects = projects.filter((project) => project.knowledgeIds.includes(item.id));
-          const relatedServices = services.filter((service) => service.knowledgeIds.includes(item.id));
-          return <article key={item.id} className="capability-row">
-            <div className="capability-row__people">{relatedProfessionals.map((person) => <span key={person.id}>{person.name.split(" ")[0]}</span>)}</div>
-            <div className="capability-row__knowledge"><span>{String(index + 1).padStart(2, "0")}</span><LineIcon name={iconByKnowledge[item.category]} /><h3>{item.name}</h3><p>{item.description}</p></div>
-            <div className="capability-row__projects">{relatedProjects.map((project) => <span key={project.id}>{project.title}</span>)}</div>
-            <div className="capability-row__services"><strong>{relatedServices.length}</strong><span>serviços conectados</span></div>
-          </article>;
-        })}
+  return <section className="capability section-pad" id="capabilities" aria-labelledby="capability-title">
+    <p className="section-index">05 <span>Capability map</span></p>
+    <div className="capability__layout"><div><h2 id="capability-title">Knowledge<br />moves through<br />the work.</h2><p>Quem sabe, o que sabe, onde foi aplicado e como contratar — relações reais derivadas por IDs.</p></div>
+      <div className="map-wrap" aria-label="Professional conecta-se a Knowledge, Project e Service">
+        <svg viewBox="0 0 700 430" role="img" aria-labelledby="map-title"><title id="map-title">Mapa relacional das capacidades</title><path d="M70 220 C175 55 260 75 350 215 S525 365 630 215" /><path className="faint" d="M70 220 C205 350 265 330 350 215 S515 75 630 215" />{[70, 265, 435, 630].map((x, index) => <circle key={x} cx={x} cy={[220, 145, 285, 215][index]} r="8" />)}</svg>
+        {[
+          ["01", "Professional", `${professionals.length} experts`],
+          ["02", "Knowledge", `${knowledge.length} fields`],
+          ["03", "Project", `${projects.length} cases`],
+          ["04", "Service", `${services.length} paths`],
+        ].map(([number, label, count], index) => <span className={`map-label l${index + 1}`} key={label}><b>{number}</b>{label}<small>{count}</small></span>)}
       </div>
-    </section>
-  );
+    </div>
+  </section>;
 }

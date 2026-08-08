@@ -12,5 +12,5 @@ const copy = {
 
 export function ContextualCta() {
   const { context } = useAdaptiveContext();
-  return <section className="contact" id="contact" aria-labelledby="contact-title"><p className="eyebrow">07 / Contextual contact</p><div><span className="context-label">Contexto inferido: {context}</span><h2 id="contact-title">{copy[context][0]}</h2><a className="contact__link focus-ring" href={`mailto:hello@rrv.digital?subject=${encodeURIComponent(`RRV — ${context}`)}`}>{copy[context][1]} <span aria-hidden="true">↗</span></a></div><p className="contact__note">Sem perfil, sem rastreamento pessoal. Apenas o contexto desta sessão, inferido localmente pelo que entra em foco.</p></section>;
+  return <section className="contact section-pad" id="contact" aria-labelledby="contact-title"><div className="contact__context"><span>Current context</span><i /><span>{context}</span></div><p id="contact-title">{copy[context][0]}</p><a className="focus-ring" href={`mailto:hello@rrv.digital?subject=${encodeURIComponent(`RRV — ${context}`)}`}><span>{copy[context][1]}</span><span aria-hidden="true">→</span></a></section>;
 }
