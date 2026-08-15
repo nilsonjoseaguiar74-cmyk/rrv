@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <title>RRV.digital</title>
+  <rect width="64" height="64" rx="12" fill="#11120F"/>
+  <path d="M9 12 24 29" fill="none" stroke="#BDF600" stroke-width="7" stroke-linecap="square"/>
+  <path d="M55 12 45 24" fill="none" stroke="#FF5D3A" stroke-width="7" stroke-linecap="square"/>
+  <path d="M9 50h11l12-10" fill="none" stroke="#9EEAFF" stroke-width="7" stroke-linecap="square" stroke-linejoin="miter"/>
+  <path d="m24 29 8 11 13-16" fill="none" stroke="#F1F0E9" stroke-width="7" stroke-linecap="square" stroke-linejoin="miter"/>
+</svg>
