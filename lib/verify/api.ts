@@ -1,8 +1,11 @@
 import type {
   VerifyIdentity,
+  VerifyExecution,
+  VerifyHistoryEntry,
   VerifyProject,
   VerifyRequirement,
   VerifySession,
+  VerifyValidation,
   VerifyVersion,
   VerifyWorkspace,
 } from "@/domain/verify/data";
@@ -85,11 +88,79 @@ export function getVerifyVersions(workspaceId: string, projectId: string) {
   );
 }
 
+export function getVerifyValidations(workspaceId: string, projectId: string) {
+  return verifyApiRequest<{ items: VerifyValidation[] }>(
+    `/api/verify/projects/${encodeURIComponent(projectId)}/validations?workspaceId=${encodeURIComponent(workspaceId)}`,
+  );
+}
+
+export function getVerifyHistory(workspaceId: string, projectId: string) {
+  return verifyApiRequest<{ items: VerifyHistoryEntry[] }>(
+    `/api/verify/projects/${encodeURIComponent(projectId)}/history?workspaceId=${encodeURIComponent(workspaceId)}`,
+  );
+}
+
+export function createVerifyValidation(
+  workspaceId: string,
+  projectId: string,
+  input: {
+    requirementId: string;
+    versionId?: string;
+    status: VerifyValidation["status"];
+    summary: string;
+    evidence?: { title: string; url: string; notes: string };
+  },
+) {
+  return verifyApiRequest<{ item: VerifyValidation }>(
+    `/api/verify/projects/${encodeURIComponent(projectId)}/validations`,
+    {
+      method: "POST",
+      body: JSON.stringify({ workspaceId, ...input }),
+    },
+  );
+}
+
+export function getVerifyExecutions(projectId: string) {
+  return verifyApiRequest<{ items: VerifyExecution[] }>(
+    `/api/verify/projects/${encodeURIComponent(projectId)}/executions`,
+  );
+}
+
+export function getVerifyExecution(executionId: string) {
+  return verifyApiRequest<{ item: VerifyExecution }>(
+    `/api/verify/executions/${encodeURIComponent(executionId)}`,
+  );
+}
+
+export function startVerifyExecution(
+  projectId: string,
+  input: { requirementId: string; testKey: VerifyExecution["testKey"] },
+) {
+  return verifyApiRequest<{ item: VerifyExecution }>(
+    `/api/verify/projects/${encodeURIComponent(projectId)}/executions`,
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+  );
+}
+
+export function cancelVerifyExecution(executionId: string) {
+  return verifyApiRequest<{ item: VerifyExecution }>(
+    `/api/verify/executions/${encodeURIComponent(executionId)}/cancel`,
+    {
+      method: "POST",
+      body: "{}",
+    },
+  );
+}
+
 export function createVerifyProject(input: {
   workspaceId: string;
   name: string;
   description: string;
   referenceUrl: string;
+  requirements: Array<Omit<VerifyRequirement, "id" | "workspaceId" | "projectId" | "createdAt" | "updatedAt">>;
 }) {
   return verifyApiRequest<{ item: VerifyProject }>("/api/verify/projects", {
     method: "POST",

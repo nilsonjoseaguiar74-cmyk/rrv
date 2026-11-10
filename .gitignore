@@ -14,3 +14,9 @@ coverage/
 *.log
 *.backup
 *.before-*
+
+# Cache de compilacao TypeScript
+tsconfig.tsbuildinfo
+
+# Evidências privadas do motor de testes Verify
+.verify-evidence/

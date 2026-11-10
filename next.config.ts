@@ -12,6 +12,10 @@ const nextConfig: NextConfig = {
         source: "/api/admin/verify/:path*",
         destination: `${apiOrigin}/api/admin/verify/:path*`,
       },
+      {
+        source: "/api/admin/auth/:path*",
+        destination: `${apiOrigin}/api/admin/auth/:path*`,
+      },
     ];
   },
 };

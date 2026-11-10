@@ -12,6 +12,7 @@ import { verifyRouter } from "./routes/verify.js";
 import { verifyAuthRouter } from "./routes/verify-auth.js";
 import { verifyAdminRouter } from "./routes/verify-admin.js";
 import { resolveVerifyIdentity } from "./middleware/verify-identity.js";
+import { startVerifyExecutionWorker } from "./workers/verify-execution-worker.js";
 import {
   apiSecurityHeaders,
   loginLimiter,
@@ -145,5 +146,10 @@ const invokedDirectly = process.argv[1] && path.resolve(process.argv[1]) === fil
 if (invokedDirectly) {
   assertProductionConfig();
   const app = await createApp();
-  app.listen(config.port, "0.0.0.0", () => console.log(`RRV.digital ativa na porta ${config.port}`));
+  app.listen(config.port, "0.0.0.0", () => {
+    if (process.env.VERIFY_EXECUTION_WORKER_ENABLED !== "false") {
+      startVerifyExecutionWorker();
+    }
+    console.log(`RRV.digital ativa na porta ${config.port}`);
+  });
 }

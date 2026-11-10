@@ -145,6 +145,66 @@ export function validateVersionInput(input) {
   return fields;
 }
 
+export function validateValidationInput(input) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw new VerifyError(400, "Corpo da solicitação inválido.", "INVALID_BODY");
+  }
+  const allowed = new Set(["requirementId", "versionId", "status", "summary", "evidence"]);
+  for (const key of Object.keys(input)) {
+    if (!allowed.has(key)) {
+      throw new VerifyError(400, `Campo não permitido: ${key}.`, "UNKNOWN_FIELD");
+    }
+  }
+  const requirementId = requireUuid(input.requirementId, "requirementId");
+  const versionId = input.versionId ? requireUuid(input.versionId, "versionId") : null;
+  if (!["passed", "failed", "blocked"].includes(input.status)) {
+    throw new VerifyError(400, "Status de validação inválido.", "INVALID_STATUS");
+  }
+  if (typeof input.summary !== "string" || !input.summary.trim() || input.summary.trim().length > 10000) {
+    throw new VerifyError(400, "Informe um resumo de até 10.000 caracteres.", "INVALID_SUMMARY");
+  }
+  let evidence;
+  if (input.evidence !== undefined && input.evidence !== null) {
+    const value = input.evidence;
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      throw new VerifyError(400, "Evidência inválida.", "INVALID_EVIDENCE");
+    }
+    for (const key of Object.keys(value)) {
+      if (!["title", "url", "notes"].includes(key)) {
+        throw new VerifyError(400, `Campo de evidência não permitido: ${key}.`, "UNKNOWN_FIELD");
+      }
+    }
+    if (
+      typeof value.title !== "string" ||
+      !value.title.trim() ||
+      value.title.trim().length > 200 ||
+      typeof value.url !== "string" ||
+      value.url.trim().length > 2048 ||
+      typeof value.notes !== "string" ||
+      value.notes.trim().length > 10000
+    ) {
+      throw new VerifyError(400, "Título, URL ou descrição da evidência inválidos.", "INVALID_EVIDENCE");
+    }
+    let url;
+    try {
+      url = new URL(value.url.trim());
+    } catch {
+      throw new VerifyError(400, "A evidência deve apontar para uma URL HTTPS válida.", "INVALID_EVIDENCE_URL");
+    }
+    if (url.protocol !== "https:") {
+      throw new VerifyError(400, "A evidência deve apontar para uma URL HTTPS válida.", "INVALID_EVIDENCE_URL");
+    }
+    evidence = { title: value.title.trim(), url: url.toString(), notes: value.notes.trim() };
+  }
+  return {
+    requirementId,
+    versionId,
+    status: input.status,
+    summary: input.summary.trim(),
+    evidence,
+  };
+}
+
 export async function authorizeWorkspace(queryFn, identity, workspaceId, action = "read") {
   requireUuid(workspaceId, "workspaceId");
   if (
@@ -214,7 +274,15 @@ export async function listProjects(identity, workspaceId) {
 
 export async function createProject(identity, workspaceId, input) {
   await assertWorkspaceAccess(identity, workspaceId, "write");
-  const fields = validateProjectInput(input);
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw new VerifyError(400, "Corpo da solicitação inválido.", "INVALID_BODY");
+  }
+  const { requirements = [], ...projectInput } = input;
+  if (!Array.isArray(requirements) || requirements.length > 100) {
+    throw new VerifyError(400, "A lista de requisitos é inválida.", "INVALID_REQUIREMENTS");
+  }
+  const fields = validateProjectInput(projectInput);
+  const requirementFields = requirements.map(validateRequirementInput);
   return transaction(async (client) => {
     const result = await client.query(
       `INSERT INTO verify_projects
@@ -227,6 +295,12 @@ export async function createProject(identity, workspaceId, input) {
     );
     const project = result.rows[0];
     await writeHistory(client, identity, workspaceId, project.id, "project.created", { name: project.name });
+    for (const [index, requirement] of requirementFields.entries()) {
+      await insertRequirement(client, identity, workspaceId, project.id, {
+        ...requirement,
+        sortOrder: requirement.sortOrder ?? index,
+      });
+    }
     return project;
   });
 }
@@ -287,25 +361,31 @@ export async function createRequirement(identity, workspaceId, projectId, input)
   await assertProjectAccess(identity, workspaceId, projectId, "write");
   const fields = validateRequirementInput(input);
   return transaction(async (client) => {
-    const result = await client.query(
-      `INSERT INTO verify_requirements
-         (workspace_id, project_id, objective, description, acceptance_criterion,
-          verification_method, module_key, sort_order, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-       RETURNING id, workspace_id AS "workspaceId", project_id AS "projectId",
-                 objective, description, acceptance_criterion AS "acceptanceCriterion",
-                 verification_method AS "verificationMethod", module_key AS "moduleKey",
-                 sort_order AS "sortOrder", created_at AS "createdAt", updated_at AS "updatedAt"`,
-      [
-        workspaceId, projectId, fields.objective, fields.description,
-        fields.acceptanceCriterion, fields.verificationMethod || "",
-        fields.moduleKey || "", fields.sortOrder || 0, identity.id,
-      ],
-    );
-    const requirement = result.rows[0];
-    await writeHistory(client, identity, workspaceId, projectId, "requirement.created", { requirementId: requirement.id });
-    return requirement;
+    return insertRequirement(client, identity, workspaceId, projectId, fields);
   });
+}
+
+async function insertRequirement(client, identity, workspaceId, projectId, fields) {
+  const result = await client.query(
+    `INSERT INTO verify_requirements
+       (workspace_id, project_id, objective, description, acceptance_criterion,
+        verification_method, module_key, sort_order, created_by)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+     RETURNING id, workspace_id AS "workspaceId", project_id AS "projectId",
+               objective, description, acceptance_criterion AS "acceptanceCriterion",
+               verification_method AS "verificationMethod", module_key AS "moduleKey",
+               sort_order AS "sortOrder", created_at AS "createdAt", updated_at AS "updatedAt"`,
+    [
+      workspaceId, projectId, fields.objective, fields.description,
+      fields.acceptanceCriterion, fields.verificationMethod || "",
+      fields.moduleKey || "", fields.sortOrder || 0, identity.id,
+    ],
+  );
+  const requirement = result.rows[0];
+  await writeHistory(client, identity, workspaceId, projectId, "requirement.created", {
+    requirementId: requirement.id,
+  });
+  return requirement;
 }
 
 export async function listVersions(identity, workspaceId, projectId) {
@@ -337,4 +417,121 @@ export async function createVersion(identity, workspaceId, projectId, input) {
     await writeHistory(client, identity, workspaceId, projectId, "version.created", { versionId: version.id, label: version.label });
     return version;
   });
+}
+
+export async function listValidations(identity, workspaceId, projectId) {
+  await assertProjectAccess(identity, workspaceId, projectId, "read");
+  const result = await query(
+    `SELECT validation.id, validation.workspace_id AS "workspaceId",
+            validation.project_id AS "projectId", validation.requirement_id AS "requirementId",
+            requirement.objective, requirement.description AS "requirementDescription",
+            requirement.acceptance_criterion AS "acceptanceCriterion",
+            validation.version_id AS "versionId", version.label AS "versionLabel",
+            validation.status, validation.summary, validation.created_at AS "createdAt",
+            COALESCE(evidence.items, '[]'::jsonb) AS evidence
+     FROM verify_validations AS validation
+     JOIN verify_requirements AS requirement
+       ON requirement.workspace_id = validation.workspace_id
+      AND requirement.project_id = validation.project_id
+      AND requirement.id = validation.requirement_id
+     LEFT JOIN verify_versions AS version
+       ON version.workspace_id = validation.workspace_id
+      AND version.project_id = validation.project_id
+      AND version.id = validation.version_id
+     LEFT JOIN LATERAL (
+       SELECT jsonb_agg(jsonb_build_object(
+         'id', item.id, 'title', item.title, 'url', item.evidence_url,
+         'notes', item.notes, 'createdAt', item.created_at
+       ) ORDER BY item.created_at) AS items
+       FROM verify_evidence AS item
+       WHERE item.workspace_id = validation.workspace_id
+         AND item.project_id = validation.project_id
+         AND item.validation_id = validation.id
+     ) AS evidence ON true
+     WHERE validation.workspace_id = $1 AND validation.project_id = $2
+     ORDER BY validation.created_at DESC`,
+    [workspaceId, projectId],
+  );
+  return result.rows;
+}
+
+export async function createValidation(identity, workspaceId, projectId, input) {
+  await assertProjectAccess(identity, workspaceId, projectId, "write");
+  const fields = validateValidationInput(input);
+  return transaction(async (client) => {
+    const requirement = await client.query(
+      `SELECT id FROM verify_requirements
+       WHERE id = $1 AND workspace_id = $2 AND project_id = $3`,
+      [fields.requirementId, workspaceId, projectId],
+    );
+    if (!requirement.rows[0]) {
+      throw new VerifyError(404, "Requisito não encontrado neste projeto.", "REQUIREMENT_NOT_FOUND");
+    }
+    if (fields.versionId) {
+      const version = await client.query(
+        `SELECT id FROM verify_versions
+         WHERE id = $1 AND workspace_id = $2 AND project_id = $3`,
+        [fields.versionId, workspaceId, projectId],
+      );
+      if (!version.rows[0]) {
+        throw new VerifyError(404, "Versão não encontrada neste projeto.", "VERSION_NOT_FOUND");
+      }
+    }
+    const inserted = await client.query(
+      `INSERT INTO verify_validations
+         (workspace_id, project_id, requirement_id, version_id, status, summary, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING id, workspace_id AS "workspaceId", project_id AS "projectId",
+                 requirement_id AS "requirementId", version_id AS "versionId",
+                 status, summary, created_at AS "createdAt"`,
+      [
+        workspaceId, projectId, fields.requirementId, fields.versionId,
+        fields.status, fields.summary, identity.id,
+      ],
+    );
+    const validation = inserted.rows[0];
+    let evidence;
+    if (fields.evidence) {
+      const saved = await client.query(
+        `INSERT INTO verify_evidence
+           (workspace_id, project_id, validation_id, title, evidence_url, notes, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         RETURNING id, title, evidence_url AS url, notes, created_at AS "createdAt"`,
+        [
+          workspaceId, projectId, validation.id, fields.evidence.title,
+          fields.evidence.url, fields.evidence.notes, identity.id,
+        ],
+      );
+      evidence = saved.rows[0];
+    }
+    await writeHistory(client, identity, workspaceId, projectId, "validation.created", {
+      validationId: validation.id,
+      requirementId: validation.requirementId,
+      versionId: validation.versionId,
+      status: validation.status,
+    });
+    if (evidence) {
+      await writeHistory(client, identity, workspaceId, projectId, "evidence.created", {
+        validationId: validation.id,
+        evidenceId: evidence.id,
+      });
+    }
+    return { ...validation, evidence: evidence ? [evidence] : [] };
+  });
+}
+
+export async function listProjectHistory(identity, workspaceId, projectId) {
+  await assertProjectAccess(identity, workspaceId, projectId, "read");
+  const result = await query(
+    `SELECT history.id, history.action, history.details,
+            history.created_at AS "createdAt",
+           identity.display_name AS "actorName"
+     FROM verify_change_history AS history
+     LEFT JOIN verify_identities AS identity ON identity.id = history.actor_identity_id
+     WHERE history.workspace_id = $1 AND history.project_id = $2
+     ORDER BY history.created_at DESC
+     LIMIT 200`,
+    [workspaceId, projectId],
+  );
+  return result.rows;
 }

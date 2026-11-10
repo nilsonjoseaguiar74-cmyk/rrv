@@ -1,29 +1,50 @@
 import { Router } from "express";
+import crypto from "node:crypto";
+import fs from "node:fs/promises";
 import { isVerifyIdentity, requireVerifyIdentity } from "../middleware/verify-identity.js";
+import { getExecutionEvidencePath } from "../executors/playwright-local.js";
 import {
   VerifyError,
   createProject,
   createRequirement,
+  createValidation,
   createVersion,
   getProject,
+  listProjectHistory,
   listProjects,
   listRequirements,
+  listValidations,
   listVersions,
   requireUuid,
   updateProject,
 } from "../services/verify.js";
+import {
+  cancelVerifyExecution,
+  enqueueVerifyExecution,
+  getVerifyExecution,
+  getVerifyExecutionEvidence,
+  listVerifyExecutions,
+} from "../services/verify-executions.js";
 
 export const verifyRouter = createVerifyRouter();
 
 export function createVerifyRouter(service = {
   createProject,
   createRequirement,
+  createValidation,
   createVersion,
   getProject,
+  listProjectHistory,
   listProjects,
   listRequirements,
+  listValidations,
   listVersions,
   updateProject,
+  enqueueVerifyExecution,
+  listVerifyExecutions,
+  getVerifyExecution,
+  cancelVerifyExecution,
+  getVerifyExecutionEvidence,
 }) {
   const router = Router();
   router.use(requireVerifyIdentity);
@@ -96,6 +117,83 @@ export function createVerifyRouter(service = {
         projectId,
         withoutWorkspaceId(request.body),
       ),
+    });
+  }));
+  router.get("/projects/:projectId/validations", asyncRoute(async (request, response) => {
+    const workspaceId = requireUuid(request.query.workspaceId, "workspaceId");
+    const projectId = requireUuid(request.params.projectId, "projectId");
+    response.json({
+      items: await service.listValidations(request.verifyIdentity, workspaceId, projectId),
+    });
+  }));
+  router.post("/projects/:projectId/validations", asyncRoute(async (request, response) => {
+    const workspaceId = requireUuid(request.body?.workspaceId, "workspaceId");
+    const projectId = requireUuid(request.params.projectId, "projectId");
+    response.status(201).json({
+      item: await service.createValidation(
+        request.verifyIdentity,
+        workspaceId,
+        projectId,
+        withoutWorkspaceId(request.body),
+      ),
+    });
+  }));
+  router.get("/projects/:projectId/executions", asyncRoute(async (request, response) => {
+    const projectId = requireUuid(request.params.projectId, "projectId");
+    response.json({
+      items: await service.listVerifyExecutions(request.verifyIdentity, projectId),
+    });
+  }));
+  router.post("/projects/:projectId/executions", asyncRoute(async (request, response) => {
+    const projectId = requireUuid(request.params.projectId, "projectId");
+    response.status(202).json({
+      item: await service.enqueueVerifyExecution(
+        request.verifyIdentity,
+        projectId,
+        request.body,
+      ),
+    });
+  }));
+  router.get("/executions/:executionId", asyncRoute(async (request, response) => {
+    const executionId = requireUuid(request.params.executionId, "executionId");
+    response.json({ item: await service.getVerifyExecution(request.verifyIdentity, executionId) });
+  }));
+  router.post("/executions/:executionId/cancel", asyncRoute(async (request, response) => {
+    const executionId = requireUuid(request.params.executionId, "executionId");
+    response.json({
+      item: await service.cancelVerifyExecution(request.verifyIdentity, executionId),
+    });
+  }));
+  router.get("/executions/:executionId/evidence", asyncRoute(async (request, response) => {
+    const executionId = requireUuid(request.params.executionId, "executionId");
+    const evidence = await service.getVerifyExecutionEvidence(request.verifyIdentity, executionId);
+    try {
+      const file = await fs.readFile(getExecutionEvidencePath(evidence.id));
+      if (
+        file.length !== evidence.byte_length ||
+        crypto.createHash("sha256").update(file).digest("hex") !== evidence.sha256
+      ) {
+        throw new VerifyError(410, "A evidência não está disponível.", "EVIDENCE_UNAVAILABLE");
+      }
+      response
+        .status(200)
+        .type("png")
+        .set("Cache-Control", "private, no-store")
+        .set("Content-Length", String(file.length))
+        .send(file);
+    } catch (error) {
+      if (error instanceof VerifyError) throw error;
+      if (error?.code === "ENOENT") {
+        throw new VerifyError(410, "A evidência não está disponível.", "EVIDENCE_UNAVAILABLE");
+      }
+      throw error;
+    }
+  }));
+  router.get("/projects/:projectId/history", asyncRoute(async (request, response) => {
+    const workspaceId = requireUuid(request.query.workspaceId, "workspaceId");
+    const projectId = requireUuid(request.params.projectId, "projectId");
+    response.json({
+      items: await service.listProjectHistory(request.verifyIdentity, workspaceId, projectId),
     });
   }));
 

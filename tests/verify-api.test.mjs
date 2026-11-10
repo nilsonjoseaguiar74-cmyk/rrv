@@ -6,6 +6,7 @@ import {
   requireUuid,
   validateProjectInput,
   validateRequirementInput,
+  validateValidationInput,
   validateVersionInput,
   VerifyError,
 } from "../server/services/verify.js";
@@ -136,4 +137,36 @@ test("version input and identifiers are validated", () => {
   assert.throws(() => validateVersionInput({ label: "v1", deliveredAt: "today" }), VerifyError);
   assert.equal(requireUuid(workspaceId, "workspaceId"), workspaceId);
   assert.throws(() => requireUuid("unknown", "workspaceId"), VerifyError);
+});
+
+test("manual validation records require a supported status and HTTPS evidence", () => {
+  const requirementId = "44444444-4444-4444-8444-444444444444";
+  assert.deepEqual(validateValidationInput({
+    requirementId,
+    status: "passed",
+    summary: "Critério confirmado manualmente.",
+    evidence: {
+      title: "Captura da entrega",
+      url: "https://example.test/evidence",
+      notes: "Referência anexada pelo responsável.",
+    },
+  }), {
+    requirementId,
+    versionId: null,
+    status: "passed",
+    summary: "Critério confirmado manualmente.",
+    evidence: {
+      title: "Captura da entrega",
+      url: "https://example.test/evidence",
+      notes: "Referência anexada pelo responsável.",
+    },
+  });
+  assert.throws(
+    () => validateValidationInput({ requirementId, status: "passed", summary: "x", evidence: { title: "Evidência", url: "http://example.test", notes: "" } }),
+    (error) => error instanceof VerifyError && error.code === "INVALID_EVIDENCE_URL",
+  );
+  assert.throws(
+    () => validateValidationInput({ requirementId, status: "unknown", summary: "x" }),
+    (error) => error instanceof VerifyError && error.code === "INVALID_STATUS",
+  );
 });

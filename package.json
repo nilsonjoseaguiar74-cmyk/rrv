@@ -12,6 +12,7 @@
     "start": "node server/app.js",
     "start:sites": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext start",
     "test": "node --test tests/vps-api.test.mjs",
+    "test:verify-browser": "VERIFY_LIVE_TEST=1 node --test tests/verify-live-integration.test.mjs",
     "test:sites": "npm run build && node --test tests/rendered-html.test.mjs",
     "check": "npm run lint && npm run test && npm run build",
     "create-admin": "node scripts/create-admin.js",
@@ -21,13 +22,17 @@
     "db:generate": "bash scripts/sites-env.sh -- drizzle-kit generate"
   },
   "dependencies": {
+    "axe-core": "4.14.0",
+    "chrome-launcher": "1.2.3",
     "dotenv": "16.6.1",
     "drizzle-orm": "0.45.2",
     "express": "5.1.0",
     "helmet": "8.1.0",
+    "lighthouse": "13.6.0",
     "lucide-react": "^1.70.0",
     "next": "16.2.6",
     "pg": "8.16.3",
+    "playwright": "1.65.0",
     "react": "19.2.6",
     "react-dom": "19.2.6"
   },

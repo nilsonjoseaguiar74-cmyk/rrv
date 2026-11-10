@@ -139,6 +139,90 @@ CREATE TABLE IF NOT EXISTS verify_versions (
 CREATE INDEX IF NOT EXISTS verify_versions_project_created_idx
   ON verify_versions(workspace_id, project_id, created_at DESC);
 
+CREATE TABLE IF NOT EXISTS verify_validations (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id uuid NOT NULL,
+  project_id uuid NOT NULL,
+  requirement_id uuid NOT NULL,
+  version_id uuid,
+  status varchar(16) NOT NULL CHECK (status IN ('passed', 'failed', 'blocked')),
+  summary text NOT NULL CHECK (length(trim(summary)) > 0),
+  created_by uuid REFERENCES verify_identities(id) ON DELETE SET NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (workspace_id, project_id, id),
+  FOREIGN KEY (workspace_id, project_id, requirement_id)
+    REFERENCES verify_requirements(workspace_id, project_id, id) ON DELETE CASCADE,
+  FOREIGN KEY (workspace_id, project_id, version_id)
+    REFERENCES verify_versions(workspace_id, project_id, id) ON DELETE RESTRICT
+);
+CREATE INDEX IF NOT EXISTS verify_validations_project_created_idx
+  ON verify_validations(workspace_id, project_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS verify_validations_version_status_idx
+  ON verify_validations(workspace_id, project_id, version_id, status);
+
+CREATE TABLE IF NOT EXISTS verify_evidence (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id uuid NOT NULL,
+  project_id uuid NOT NULL,
+  validation_id uuid NOT NULL,
+  title varchar(200) NOT NULL CHECK (length(trim(title)) > 0),
+  evidence_url text NOT NULL CHECK (length(trim(evidence_url)) > 0),
+  notes text NOT NULL DEFAULT '',
+  created_by uuid REFERENCES verify_identities(id) ON DELETE SET NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  FOREIGN KEY (workspace_id, project_id, validation_id)
+    REFERENCES verify_validations(workspace_id, project_id, id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS verify_evidence_validation_created_idx
+  ON verify_evidence(workspace_id, project_id, validation_id, created_at);
+
+CREATE TABLE IF NOT EXISTS verify_test_executions (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id uuid NOT NULL,
+  project_id uuid NOT NULL,
+  requirement_id uuid NOT NULL,
+  initiated_by uuid REFERENCES verify_identities(id) ON DELETE SET NULL,
+  test_key varchar(80) NOT NULL CHECK (test_key = 'local-page-smoke'),
+  status varchar(16) NOT NULL DEFAULT 'queued'
+    CHECK (status IN ('queued', 'running', 'passed', 'failed', 'cancelled')),
+  results jsonb NOT NULL DEFAULT '[]'::jsonb,
+  error_message varchar(1000),
+  cancel_requested_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  started_at timestamptz,
+  completed_at timestamptz,
+  UNIQUE (workspace_id, project_id, id),
+  FOREIGN KEY (workspace_id, project_id, requirement_id)
+    REFERENCES verify_requirements(workspace_id, project_id, id) ON DELETE CASCADE
+);
+ALTER TABLE verify_test_executions
+  DROP CONSTRAINT IF EXISTS verify_test_executions_test_key_check;
+ALTER TABLE verify_test_executions
+  DROP CONSTRAINT IF EXISTS verify_test_executions_test_key_supported_check;
+ALTER TABLE verify_test_executions
+  ADD CONSTRAINT verify_test_executions_test_key_supported_check
+  CHECK (test_key IN ('local-page-smoke', 'local-lighthouse-audit', 'local-axe-audit'));
+CREATE INDEX IF NOT EXISTS verify_test_executions_queue_idx
+  ON verify_test_executions(created_at)
+  WHERE status = 'queued';
+CREATE INDEX IF NOT EXISTS verify_test_executions_project_created_idx
+  ON verify_test_executions(workspace_id, project_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS verify_execution_evidence (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id uuid NOT NULL,
+  project_id uuid NOT NULL,
+  execution_id uuid NOT NULL,
+  media_type varchar(80) NOT NULL CHECK (media_type = 'image/png'),
+  byte_length integer NOT NULL CHECK (byte_length > 0),
+  sha256 char(64) NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  FOREIGN KEY (workspace_id, project_id, execution_id)
+    REFERENCES verify_test_executions(workspace_id, project_id, id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS verify_execution_evidence_execution_idx
+  ON verify_execution_evidence(workspace_id, project_id, execution_id);
+
 CREATE TABLE IF NOT EXISTS verify_change_history (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   workspace_id uuid NOT NULL REFERENCES verify_workspaces(id) ON DELETE CASCADE,
@@ -162,5 +246,24 @@ CREATE INDEX IF NOT EXISTS verify_change_history_workspace_created_idx
   ON verify_change_history(workspace_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS verify_change_history_project_created_idx
   ON verify_change_history(workspace_id, project_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS verify_access_requests (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name varchar(160) NOT NULL CHECK (length(trim(name)) >= 2),
+  email varchar(320) NOT NULL,
+  company_or_project varchar(160) NOT NULL CHECK (length(trim(company_or_project)) >= 2),
+  interest varchar(1200) NOT NULL CHECK (length(trim(interest)) BETWEEN 20 AND 1200),
+  status varchar(16) NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending', 'approving', 'approved', 'rejected')),
+  invitation_id uuid REFERENCES verify_invitations(id) ON DELETE SET NULL,
+  reviewed_by_admin_id uuid REFERENCES admin_users(id) ON DELETE SET NULL,
+  reviewed_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS verify_access_requests_status_created_idx
+  ON verify_access_requests(status, created_at ASC);
+CREATE INDEX IF NOT EXISTS verify_access_requests_email_created_idx
+  ON verify_access_requests(lower(email), created_at DESC);
 
 COMMIT;
