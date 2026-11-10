@@ -16,6 +16,13 @@ npm run dev
 
 A aplicação estará disponível no endereço informado pelo Next.js no terminal.
 
+## RRV Verify
+
+O protótipo frontend do Verify está disponível em `/start/verify`. As telas
+principais usam rotas do App Router, e projetos demonstrativos são armazenados
+no `localStorage` do navegador. Os resultados e evidências são sintéticos; o
+Verify não executa testes reais e não possui backend.
+
 ## Scripts
 
 ```bash
