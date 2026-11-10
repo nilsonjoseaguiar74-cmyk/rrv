@@ -8,7 +8,7 @@ import { RRVLogo } from "@/components/brand/RRVLogo";
 export type LocalAdmin = { id: string; email: string; name: string; role: "owner" | "admin" | "editor" | "viewer" };
 const AdminContext = createContext<LocalAdmin | null>(null);
 export const useAdminSession = () => useContext(AdminContext);
-const navigation = [["Dashboard","/admin"],["Home","/admin/home"],["Serviços","/admin/services"],["Projetos","/admin/projects"],["Equipe","/admin/team"],["CTAs","/admin/ctas"],["Leads","/admin/leads"],["Configurações","/admin/settings"]] as const;
+const navigation = [["Dashboard","/admin"],["Home","/admin/home"],["Serviços","/admin/services"],["Projetos","/admin/projects"],["Equipe","/admin/team"],["CTAs","/admin/ctas"],["Leads","/admin/leads"],["Acesso Beta","/admin/verify-access"],["Configurações","/admin/settings"]] as const;
 
 export function AdminSessionShell({ children }: { children: React.ReactNode }) {
   const [admin,setAdmin]=useState<LocalAdmin|null>(null); const [loading,setLoading]=useState(true); const router=useRouter(); const pathname=usePathname();

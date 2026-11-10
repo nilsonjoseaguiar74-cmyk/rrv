@@ -153,3 +153,11 @@ if (invokedDirectly) {
     console.log(`RRV.digital ativa na porta ${config.port}`);
   });
 }
+import { verifyAccessRequestsRouter } from "./routes/verify-access-requests.js";
+  verifyAccessRequestLimiter,
+  app.use(
+    "/api/verify/access-requests",
+    verifyAccessRequestLimiter,
+    rejectUnexpectedContentType,
+    verifyAccessRequestsRouter,
+  );

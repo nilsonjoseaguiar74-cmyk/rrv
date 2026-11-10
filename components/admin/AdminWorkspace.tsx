@@ -3,9 +3,18 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useAdminSession } from "@/components/admin/AdminSessionShell";
 
-type Section = "dashboard" | "home" | "services" | "projects" | "team" | "ctas" | "leads" | "settings";
+type Section = "dashboard" | "home" | "services" | "projects" | "team" | "ctas" | "leads" | "settings" | "verify-access";
 type Item = Record<string, unknown> & { id?: number | string };
 type Field = { key: string; label: string; type?: "text" | "textarea" | "number" | "url" | "select" | "checkbox"; options?: string[]; wide?: boolean };
+type VerifyAccessRequest = {
+  id: string;
+  name: string;
+  email: string;
+  companyOrProject: string;
+  interest: string;
+  status: "pending" | "approving" | "approved" | "rejected";
+  createdAt: string;
+};
 
 const sectionMeta: Record<Section, [string, string]> = {
   dashboard: ["Visão geral", "Controle editorial, comercial e operacional em uma única superfície."],
@@ -16,6 +25,7 @@ const sectionMeta: Record<Section, [string, string]> = {
   ctas: ["CTAs", "Defina mensagens e destinos por contexto da experiência pública."],
   leads: ["Leads", "Acompanhe cada oportunidade do primeiro contato ao resultado."],
   settings: ["Configurações", "Ajuste os textos comerciais da página Start e parâmetros editoriais."],
+  "verify-access": ["Acesso Beta", "Analise solicitações de participação no RRV Verify Beta e envie convites somente após aprovação."],
 };
 
 const fields: Partial<Record<Section, Field[]>> = {
@@ -63,18 +73,24 @@ export function AdminWorkspace({ section }: { section: Section }) {
   const role = useAdminSession()?.role || "viewer";
   const [data, setData] = useState<Record<string, unknown>>({});
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [feedback, setFeedback] = useState("");
   const [editing, setEditing] = useState<Item | null>(null);
   const writable = role !== "viewer";
   const [title, description] = sectionMeta[section];
 
   const load = useCallback(async () => {
+    setLoadError(false);
     try {
-      const response = await fetch(`/api/admin/${section}`, { cache: "no-store" });
+      const endpoint = section === "verify-access"
+        ? "/api/admin/verify/access-requests"
+        : `/api/admin/${section}`;
+      const response = await fetch(endpoint, { cache: "no-store" });
       const payload = await response.json() as Record<string, unknown> & { error?: string };
       if (!response.ok) throw new Error(payload.error || "Não foi possível carregar o módulo.");
       setData(payload);
     } catch (error) {
+      setLoadError(true);
       setFeedback(error instanceof Error ? error.message : "Falha ao carregar.");
     } finally { setLoading(false); }
   }, [section]);
@@ -127,6 +143,18 @@ export function AdminWorkspace({ section }: { section: Section }) {
     await mutate(`/api/admin/${section}/${id}`, { method: "DELETE" }, "Registro arquivado.");
   }
 
+  async function reviewAccessRequest(request: VerifyAccessRequest, decision: "approved" | "rejected") {
+    const confirmation = decision === "approved"
+      ? `Aprovar o acesso de ${request.name} e enviar um convite por e-mail?`
+      : `Rejeitar a solicitação de ${request.name}?`;
+    if (!confirm(confirmation)) return;
+    await mutate(
+      `/api/admin/verify/access-requests/${request.id}`,
+      { method: "PATCH", body: JSON.stringify({ decision }) },
+      decision === "approved" ? "Solicitação aprovada e convite enviado." : "Solicitação rejeitada.",
+    );
+  }
+
   if (loading) return <div className="admin-page"><p className="admin-loading">Carregando módulo…</p></div>;
 
   return (
@@ -134,11 +162,77 @@ export function AdminWorkspace({ section }: { section: Section }) {
       <div className="admin-page-head"><div><span>CMS / {section}</span><h1>{title}.</h1></div><p>{description}</p></div>
       {feedback && <div className="admin-feedback" role="status">{feedback}</div>}
       {section === "dashboard" && <Dashboard data={data} />}
+      {section === "verify-access" && (
+        loadError
+          ? <p className="admin-loading" role="alert">Não foi possível carregar as solicitações. Tente atualizar a página.</p>
+          : <VerifyAccessRequestBoard
+              items={(data.items || []) as VerifyAccessRequest[]}
+              writable={role === "admin" || role === "owner"}
+              onReview={reviewAccessRequest}
+            />
+      )}
       {(section === "home" || section === "settings") && <SettingsEditor fields={section === "home" ? homeFields : settingFields} values={settings} writable={writable} onSubmit={saveSettings} />}
       {section === "home" && <HomeSectionManager items={(data.sections || []) as Item[]} writable={writable} onSave={saveHomeSections} />}
       {fields[section] && <CollectionEditor section={section} fields={fields[section] || []} items={(data.items || []) as Item[]} editing={editing} writable={writable} onEdit={setEditing} onCancel={() => setEditing(null)} onSubmit={saveCollection} onArchive={archive} />}
       {section === "leads" && <LeadBoard items={(data.items || []) as Item[]} writable={writable && (role === "admin" || role === "owner")} onStatus={(id, status, notes) => mutate(`/api/admin/leads/${id}/status`, { method: "PATCH", body: JSON.stringify({ status, notes }) }, notes === undefined ? "Status do lead atualizado." : "Observação registrada.")} />}
     </div>
+  );
+}
+
+function VerifyAccessRequestBoard({
+  items,
+  writable,
+  onReview,
+}: {
+  items: VerifyAccessRequest[];
+  writable: boolean;
+  onReview: (request: VerifyAccessRequest, decision: "approved" | "rejected") => void;
+}) {
+  if (!items.length) {
+    return <section className="verify-access-requests-empty"><h2>Nenhuma solicitação recebida.</h2><p>Novos pedidos de acesso ao Beta aparecerão aqui.</p></section>;
+  }
+  return (
+    <section className="verify-access-requests" aria-label="Solicitações de acesso ao Beta">
+      {items.map((item) => (
+        <article key={item.id}>
+          <header>
+            <div><span>{new Date(item.createdAt).toLocaleString("pt-BR")}</span><h2>{item.name}</h2></div>
+            <span className={`verify-access-request-status ${item.status}`}>{{
+              pending: "Pendente",
+              approving: "Enviando convite",
+              approved: "Aprovada",
+              rejected: "Rejeitada",
+            }[item.status]}</span>
+          </header>
+          <dl>
+            <div><dt>E-mail</dt><dd>{item.email}</dd></div>
+            <div><dt>Empresa ou projeto</dt><dd>{item.companyOrProject}</dd></div>
+          </dl>
+          <p>{item.interest}</p>
+          {item.status === "pending" && (
+            <footer>
+              <button
+                className="is-primary"
+                disabled={!writable}
+                onClick={() => onReview(item, "approved")}
+                type="button"
+              >
+                Aprovar e enviar convite
+              </button>
+              <button
+                className="is-danger"
+                disabled={!writable}
+                onClick={() => onReview(item, "rejected")}
+                type="button"
+              >
+                Rejeitar
+              </button>
+            </footer>
+          )}
+          {item.status === "approving" && <small>O processamento do convite está em andamento. Se este estado persistir, contate outro administrador antes de reenviar.</small>}
+        </article>
+      ))}
+    </section>
   );
 }
 

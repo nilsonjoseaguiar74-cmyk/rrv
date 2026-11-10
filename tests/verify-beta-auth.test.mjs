@@ -18,6 +18,7 @@ import {
   resolveVerifyIdentity,
 } from "../server/middleware/verify-identity.js";
 import {
+  verifyAccessRequestLimiter,
   verifyInviteAdminLimiter,
   verifyInviteLimiter,
 } from "../server/api-security.js";
@@ -528,6 +529,7 @@ test("unauthenticated and forged administrative identities cannot reach Verify",
 
 test("access-code and invitation issuance are rate-limited per client IP", () => {
   for (const [limiter, scope, limit] of [
+    [verifyAccessRequestLimiter, "access-request", 3],
     [verifyInviteLimiter, "access-code", 5],
     [verifyInviteAdminLimiter, "issue", 10],
   ]) {

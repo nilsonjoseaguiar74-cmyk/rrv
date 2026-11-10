@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { AdminWorkspace } from "@/components/admin/AdminWorkspace";
 
 export const dynamic = "force-dynamic";
-const sections = ["home", "services", "projects", "team", "ctas", "leads", "settings"] as const;
+const sections = ["home", "services", "projects", "team", "ctas", "leads", "settings", "verify-access"] as const;
 
 export default async function AdminSectionPage({ params }: { params: Promise<{ section: string }> }) {
   const { section } = await params;

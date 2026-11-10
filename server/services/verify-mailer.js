@@ -60,6 +60,19 @@ function validateRecipient(to) {
   return to;
 }
 
+function getProviderErrorCode(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return "unknown";
+  }
+  for (const field of ["name", "code", "type"]) {
+    const value = payload[field];
+    if (typeof value === "string" && /^[A-Za-z0-9_.-]{1,80}$/.test(value)) {
+      return value;
+    }
+  }
+  return "unknown";
+}
+
 async function sendEmail({ to, subject, text, html }) {
   if (!isVerifyEmailDeliveryAvailable()) {
     throw unavailable();
@@ -86,6 +99,17 @@ async function sendEmail({ to, subject, text, html }) {
     });
 
     if (!response.ok) {
+      let payload;
+      try {
+        payload = await response.json();
+      } catch {
+        payload = null;
+      }
+      console.error("verify_email_delivery_failed", {
+        status: response.status,
+        category: response.status === 401 ? "authentication" : "provider_response",
+        providerCode: getProviderErrorCode(payload),
+      });
       throw unavailable();
     }
 

@@ -88,6 +88,12 @@ export const verifyInviteLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
 });
 
+export const verifyAccessRequestLimiter = rateLimit({
+  scope: "verify-access-request",
+  limit: 3,
+  windowMs: 60 * 60 * 1000,
+});
+
 export const verifyInviteAdminLimiter = rateLimit({
   scope: "verify-invite-admin",
   limit: 10,

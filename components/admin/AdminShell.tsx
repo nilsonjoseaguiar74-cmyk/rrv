@@ -6,7 +6,7 @@ import { RRVLogo } from "@/components/brand/RRVLogo";
 const navigation = [
   ["Dashboard", "/admin"], ["Home", "/admin/home"], ["Serviços", "/admin/services"],
   ["Projetos", "/admin/projects"], ["Equipe", "/admin/team"], ["CTAs", "/admin/ctas"],
-  ["Leads", "/admin/leads"], ["Configurações", "/admin/settings"],
+  ["Leads", "/admin/leads"], ["Acesso Beta", "/admin/verify-access"], ["Configurações", "/admin/settings"],
 ] as const;
 
 export function AdminShell({ admin, children }: { admin: AdminIdentity; children: React.ReactNode }) {
