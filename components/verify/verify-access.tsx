@@ -1,0 +1,198 @@
+"use client";
+
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { FormEvent, useEffect, useState } from "react";
+import { getVerifySession, VerifyApiError } from "@/lib/verify/api";
+
+function VerifyAccessShell({ children }: { children: React.ReactNode }) {
+  return (
+    <div id="rrv-verify">
+      <main className="verify-auth">
+        <Link className="verify-auth-brand" href="/start/verify">
+          RRV.digital <span>/ Verify</span>
+        </Link>
+        {children}
+        <p className="verify-auth-note">
+          Beta fechado · Acesso somente por convite da RRV.
+        </p>
+      </main>
+    </div>
+  );
+}
+
+export function VerifyInviteForm() {
+  const router = useRouter();
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [code, setCode] = useState("");
+  const [message, setMessage] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [codeRequested, setCodeRequested] = useState(false);
+
+  async function requestCode(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSubmitting(true);
+    setMessage("");
+    try {
+      const response = await fetch("/api/verify/auth/request-code", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        throw new Error(payload.error || "Não foi possível solicitar um código.");
+      }
+      setCodeRequested(true);
+      setMessage("Se este e-mail estiver cadastrado e houver convite válido, enviaremos um código temporário.");
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível solicitar um código.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function verifyCode(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSubmitting(true);
+    setMessage("");
+    try {
+      const response = await fetch("/api/verify/auth/verify-code", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, code, name }),
+      });
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        throw new Error(payload.error || "Código inválido ou expirado.");
+      }
+      router.replace("/start/verify/dashboard");
+    } catch (error) {
+      setMessage(
+        error instanceof Error ? error.message : "Não foi possível confirmar o código.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <VerifyAccessShell>
+      <section className="verify-auth-panel" aria-labelledby="verify-invite-title">
+        <span className="eyebrow">Acesso privado</span>
+        <h1 id="verify-invite-title">Acesse seu workspace.</h1>
+        <p>
+          O acesso é exclusivo para e-mails convidados pela RRV. Confirme sua
+          identidade com um código temporário enviado ao e-mail cadastrado.
+        </p>
+        {!codeRequested ? (
+            <form onSubmit={requestCode}>
+              <label>
+                Nome
+                <input
+                  autoComplete="name"
+                  maxLength={160}
+                  required
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                />
+              </label>
+              <label>
+                E-mail do convite
+                <input
+                  autoComplete="email"
+                  maxLength={320}
+                  required
+                  type="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                />
+              </label>
+              {message && <p className="verify-auth-error" role="alert">{message}</p>}
+              <button className="primary" disabled={submitting} type="submit">
+                {submitting ? "Solicitando…" : "Enviar código temporário"}
+              </button>
+            </form>
+        ) : (
+          <form onSubmit={verifyCode}>
+            <p>
+              Se <strong>{email}</strong> estiver cadastrado e houver convite
+              válido, você receberá um código de seis dígitos.
+            </p>
+            <label>
+              Código de acesso
+              <input
+                autoComplete="one-time-code"
+                inputMode="numeric"
+                maxLength={6}
+                minLength={6}
+                pattern="[0-9]{6}"
+                required
+                value={code}
+                onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+              />
+            </label>
+            {message && <p className="verify-auth-error" role="alert">{message}</p>}
+            <button className="primary" disabled={submitting || code.length !== 6} type="submit">
+              {submitting ? "Verificando…" : "Confirmar e acessar o painel"}
+            </button>
+            <button
+              className="outline"
+              onClick={() => {
+                setCodeRequested(false);
+                setCode("");
+                setMessage("");
+              }}
+              type="button"
+            >
+              Alterar e-mail
+            </button>
+          </form>
+        )}
+      </section>
+    </VerifyAccessShell>
+  );
+}
+
+export function VerifyAccountSession() {
+  const router = useRouter();
+  const [message, setMessage] = useState("Verificando sua sessão segura…");
+
+  useEffect(() => {
+    getVerifySession()
+      .then(() => router.replace("/start/verify/dashboard"))
+      .catch((error: unknown) => {
+        if (error instanceof VerifyApiError && error.status === 401) {
+          router.replace("/start/verify/access");
+          return;
+        }
+        setMessage(
+          error instanceof Error
+            ? error.message
+            : "Não foi possível verificar sua sessão.",
+        );
+      });
+  }, [router]);
+
+  return (
+    <VerifyAccessShell>
+      <section className="verify-auth-panel" aria-labelledby="verify-session-title">
+        <span className="eyebrow">Acesso privado</span>
+        <h1 id="verify-session-title">Abrindo seu painel.</h1>
+        <p role="status">{message}</p>
+        {message !== "Verificando sua sessão segura…" && (
+          <button className="outline" onClick={() => router.refresh()} type="button">
+            Tentar novamente
+          </button>
+        )}
+      </section>
+    </VerifyAccessShell>
+  );
+}

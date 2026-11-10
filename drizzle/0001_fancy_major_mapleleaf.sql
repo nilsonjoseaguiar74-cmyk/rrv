@@ -1,0 +1,2 @@
+CREATE INDEX `lead_rate_limits_fingerprint_created_idx` ON `lead_rate_limits` (`fingerprint`,`created_at`);--> statement-breakpoint
+CREATE INDEX `leads_status_created_idx` ON `leads` (`status`,`created_at`);
