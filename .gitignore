@@ -1,18 +1,16 @@
-# dependencies
-/node_modules
 
-# Next.js
-/.next/
-/out/
-
-# production
-/build
-
-# local environment files
-.env*
+# RRV Verify - desenvolvimento local
+node_modules/
+.next/
+dist/
+coverage/
+.wrangler/
+.env
+.env.*
 !.env.example
-
-# logs and tooling
+*.pem
+*.key
+*.p12
 *.log
-.DS_Store
-*.tsbuildinfo
+*.backup
+*.before-*

@@ -1,50 +1,113 @@
-# RRV.digital
+# RRV.digital — aplicação autônoma para VPS
 
-Fundação frontend do hub digital RRV: Growth, Experience e Engineering operando como um único sistema.
+Aplicação full-stack com a home aprovada, `/start`, `/privacidade`, painel administrativo, CMS, leads, autenticação local, PostgreSQL e auditoria. A versão VPS não depende de Sign in with ChatGPT, APIs privadas do Sites ou storage proprietário.
 
 ## Requisitos
 
-- Node.js 20.9 ou superior
-- npm 10 ou superior
+- Node.js 22+
+- PostgreSQL 14+
+- Docker 24+ e Docker Compose
+- NGINX apontando `rrv.digital` para `127.0.0.1:4321`
 
-## Instalação e desenvolvimento
+## Instalação em `/opt/rrv-digital`
 
 ```bash
-npm install
+cd /opt/rrv-digital
+npm ci
+cp .env.example .env
+```
+
+Preencha no `.env`, no mínimo:
+
+```dotenv
+NODE_ENV=production
+PORT=3000
+DATABASE_URL=postgresql://usuario:senha@host:5432/rrv_digital
+DATABASE_SSL=false
+SESSION_SECRET=gere-um-segredo-aleatorio-com-pelo-menos-32-caracteres
+ALLOWED_ORIGIN=https://rrv.digital
+```
+
+Não versione o arquivo `.env`.
+
+## Banco e primeiro administrador
+
+```bash
+npm run db:schema
+npm run create-admin
+```
+
+`create-admin` solicita nome, e-mail e senha. O banco recebe somente o hash scrypt com salt individual, nunca a senha em texto puro.
+
+## Executar com Docker
+
+```bash
+docker compose build
+docker compose up -d
+docker compose ps
+curl -fsS http://127.0.0.1:4321/api/health
+```
+
+O container `rrv-digital-web` ouve internamente na porta `3000` e publica somente em `127.0.0.1:4321`.
+
+## NGINX
+
+```nginx
+location / {
+    proxy_pass http://127.0.0.1:4321;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
+
+Valide e recarregue o NGINX conforme o procedimento operacional da VPS.
+
+## Rotas
+
+Públicas:
+
+- `/`, `/start`, `/privacidade`
+- `GET /api/health`
+- `POST /api/leads`
+- `GET /api/public/home|services|projects|team`
+
+Administrativas:
+
+- `/admin/login`, `/admin`, `/admin/home`, `/admin/services`, `/admin/projects`, `/admin/team`, `/admin/leads`, `/admin/settings`
+- `POST /api/admin/auth/login|logout`
+- `GET /api/admin/auth/me|dashboard|home|services|projects|team|leads|settings`
+- CRUD de serviços, projetos, equipe e CTAs
+- atualização de home/configurações, publicação e status de leads
+
+## Segurança
+
+- cookie `HttpOnly`, `SameSite=Strict` e `Secure` em produção;
+- tokens de sessão aleatórios persistidos apenas como HMAC SHA-256;
+- senhas scrypt com salt;
+- roles `owner`, `admin`, `editor` e `viewer` verificadas no servidor;
+- consultas parametrizadas, Helmet, restrição de origem e auditoria;
+- nenhuma credencial real no código.
+
+## Operação
+
+O PostgreSQL é externo ao Compose. Reiniciar o container não apaga conteúdo, leads ou usuários. Faça backup periódico do banco e monitore `/api/health`.
+
+```bash
+docker compose build --pull
+docker compose up -d
+curl -fsS http://127.0.0.1:4321/api/health
+```
+
+## Desenvolvimento e validação
+
+```bash
 npm run dev
+npm test
+npm run lint
+npm run build
 ```
 
-A aplicação estará disponível no endereço informado pelo Next.js no terminal.
-
-## Scripts
-
-```bash
-npm run dev        # ambiente local
-npm run lint       # análise estática
-npm run typecheck  # validação TypeScript sem emissão
-npm run build      # build otimizado de produção
-npm run start      # executa o build de produção
-```
-
-## Arquitetura de pastas
-
-```text
-src/
-├── app/                 # App Router, metadata e composição de páginas
-├── components/
-│   ├── layout/          # header e footer
-│   ├── sections/        # seções editoriais da home
-│   └── ui/              # primitivas reutilizáveis
-├── data/                # collections tipadas de mock data
-├── domain/              # tipos e contratos do negócio
-├── lib/                 # seletores e resolução de relacionamentos
-└── styles/              # tokens e estilos globais responsivos
-```
-
-Assets locais ficam em `public/images`. A direção de arquitetura está documentada em `docs/ARCHITECTURE.md`.
-
-## Princípio de dados dinâmicos
-
-Profissionais, projetos, conhecimentos e disciplinas são collections independentes, conectadas por IDs normalizados. Componentes não importam registros individuais nem pressupõem quantidades fixas. A camada `lib/content.ts` expõe consultas para a apresentação, delimitando o ponto que poderá trocar mock data por API e PostgreSQL sem reconstruir a UI.
-
-Nesta fase não existem API, banco, autenticação, admin ou configuração de produção.
+O frontend existente continua compatível com a validação do Sites. A VPS usa `node server/app.js`: APIs Express/PostgreSQL primeiro e as demais rotas delegadas ao Next.js.
